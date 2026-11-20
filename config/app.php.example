@@ -1,0 +1,134 @@
+<?php
+
+/**
+ * Intrabase — application configuration.
+ *
+ * Copy this file to config/app.php and adjust the values.
+ * NEVER commit config/app.php: it holds the database password and the secret key.
+ */
+
+return [
+
+    // =========================================================================
+    // Application
+    // =========================================================================
+
+    /** Debug mode: shows full error pages. MUST be false in production. */
+    'debug' => false,
+
+    /** Application name (window title, e-mails...) */
+    'name' => 'Intrabase',
+
+    /** Public URL, no trailing slash. Used for links in e-mails and from the CLI. */
+    'url' => 'https://intranet.example.org',
+
+    /** Default locale: ca, es, en, eu */
+    'locale' => 'en',
+
+    /** PHP timezone identifier */
+    'timezone' => 'Europe/Madrid',
+
+    /**
+     * Secret key for encrypting stored credentials (SMTP passwords, tokens...).
+     * Generate one with:  php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
+     * Changing it makes the values already encrypted unreadable.
+     */
+    'app_secret' => '',
+
+    // =========================================================================
+    // Database (master database: holds ib_tenants for multi-tenant hosts)
+    // =========================================================================
+
+    'db_host' => '127.0.0.1',
+    'db_port' => 3306,
+    'db_name' => 'intrabase',
+    'db_user' => 'intrabase',
+    'db_pass' => '',
+
+    // =========================================================================
+    // Session and security
+    // =========================================================================
+
+    /** Session cookie name (overridden per tenant by ib_tenants.session_name) */
+    'session_name' => 'IBSESSID',
+
+    /** Session idle timeout in seconds (default 7 days) */
+    'session_timeout' => 604800,
+
+    /** Mark the session cookie Secure even if PHP does not see HTTPS (behind a proxy) */
+    'force_https' => true,
+
+    /** Path of the login form */
+    'login_path' => '/login',
+
+    /**
+     * Addresses that never trigger the "already logged in elsewhere" check
+     * (e.g. your office NAT). Empty by default.
+     */
+    'trusted_ips' => [],
+
+    // =========================================================================
+    // Logging and files
+    // =========================================================================
+
+    /** Log directory (writable by the web server) */
+    'log_dir' => '/var/log/intrabase',
+
+    /** Minimum log level: debug, info, notice, warning, error, critical */
+    'log_level' => 'warning',
+
+    /** Uploaded files directory (writable by the web server, outside public/) */
+    'upload_dir' => '/var/lib/intrabase/uploads',
+
+    /** Maximum upload size in bytes */
+    'upload_max_size' => 20 * 1024 * 1024,
+
+    /** Allowed MIME types for uploads */
+    'upload_allowed_mimes' => [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv',
+        'application/zip',
+    ],
+
+    // =========================================================================
+    // Extending the framework
+    // =========================================================================
+
+    /**
+     * Plugins: classes implementing Intrabase\Core\PluginInterface. Each one
+     * registers its routes, menu entries, CSP sources, cron tasks... See README.
+     */
+    'plugins' => [
+        // \Acme\Intrabase\Crm\CrmPlugin::class,
+    ],
+
+    /** Home page class: (Session, Connection) → render(): string. Default: a grid of apps. */
+    // 'dashboard_class' => \Intrabase\View\Dashboard::class,
+
+    /**
+     * Per-tenant overrides directory (modules in mod/, components in
+     * components/, templates in tpl/, custom.css, csp.php...). Placeholders:
+     * {host}, {domain}, {subdomain}. Not set = no per-tenant overrides.
+     */
+    // 'tenant_data_path' => '/var/lib/intrabase/tenants/{host}',
+
+    /** Footer HTML of the application pages (trusted). Default: "© <year> <name>". */
+    // 'footer_html' => '',
+
+    /** Dedicated REST API host that serves /v1/* (e.g. api.example.org). Optional. */
+    // 'api_host' => '',
+
+    /**
+     * Send users to another tenant of the same host after login when their
+     * organization's name matches that tenant (ib_tenants.client_name). The
+     * target logs them in by e-mail with a one-time token. Off by default.
+     */
+    // 'cross_tenant_login' => false,
+
+    /** Databases bin/cron.php runs tasks in (multi-tenant hosts). Default: [db_name]. */
+    // 'cron_databases' => ['intrabase'],
+
+];

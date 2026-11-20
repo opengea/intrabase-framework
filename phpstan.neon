@@ -1,0 +1,31 @@
+#
+# PHPStan configuration — focalitzat al codi del refactor SOLID.
+#
+# Cobertura actual (level 7):
+#   - src/Domain/         (entitats, VOs, contractes, events)
+#   - src/Application/    (use cases, listeners, read models)
+#   - src/Infrastructure/ (adapters)
+#   - tests/Unit/Domain/, tests/Unit/Application/, tests/Unit/Infrastructure/
+#
+# La resta de src/ (Auth, Core, Modules, etc.) NO s'analitza aqui —
+# seria massa soroll amb l'escala actual de violacions legacy. Si algun
+# dia algu vol atacar el Module god-class, afegir-lo al `paths`.
+#
+# Executar:
+#   php8 vendor/bin/phpstan analyse
+#
+parameters:
+    level: 7
+
+    paths:
+        - src/Domain
+        - src/Application
+        - src/Infrastructure
+        - tests/Unit/Domain
+        - tests/Unit/Application
+        - tests/Unit/Infrastructure
+
+    tmpDir: build/phpstan
+
+    bootstrapFiles:
+        - vendor/autoload.php

@@ -1,0 +1,6 @@
+# Intrabase is an application behind a login (and a REST API): nothing here
+# should appear in search engines. Without this file /robots.txt would redirect
+# to /login and crawlers would waste their time on it.
+
+User-agent: *
+Disallow: /

@@ -1,0 +1,101 @@
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+# ---- Security ----
+<FilesMatch "\.(env|json|lock|md|yml|yaml|sh|sql|log|bak|backup)$">
+    Require all denied
+</FilesMatch>
+
+# ---- Denegar (403) rutes d'escaneig/atac conegudes (18/06/2026) ----
+# 403 immediat abans del front-controller, perquè fail2ban bani els escàners.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # WebDAV door (Drive as a network drive, 17/09/2026). Before the
+    # scanner rules: a user's own folder may well be called node_modules.
+    RewriteRule ^dav(/.*)?$ dav.php [L,QSA]
+    # Windows' WebDAV client asks the host root first.
+    RewriteCond %{REQUEST_METHOD} ^(OPTIONS|PROPFIND)$
+    RewriteRule ^$ dav.php [L]
+    # Claude connector (MCP, ADR 003): stateless door, Bearer tokens.
+    # /oauth/mcp/authorize needs the session and stays on index.php.
+    RewriteRule ^mcp/?$ mcp.php [L,QSA]
+    RewriteRule ^\.well-known/oauth-(protected-resource|authorization-server)(/.*)?$ mcp.php [L,QSA]
+    RewriteRule ^oauth/mcp/(register|token|revoke|gateway/lookup)$ mcp.php [L,QSA]
+    RewriteRule (^|/)\.(env|git|svn|hg|aws|ssh|docker)([-./]|$) - [F,L,NC]
+    RewriteRule (^|/)\.(htaccess|htpasswd)$ - [F,L,NC]
+    RewriteRule (^|/)(wp-login|wp-admin|wp-config|wp-plain|wp-load|wp-cron|xmlrpc|wlwmanifest)(\.php)?($|/) - [F,L,NC]
+    RewriteRule (^|/)wp-(content|includes|json)(/|$) - [F,L,NC]
+    RewriteRule (^|/)(ALFA_DATA|alfacgiapi)(/|$) - [F,L,NC]
+    RewriteRule \.(alfa|suspected|phtml|phar)$ - [F,L,NC]
+    RewriteRule (^|/)(c99|r57|wso|shell|backdoor|apismtp|apikey)\.php$ - [F,L,NC]
+    RewriteRule (^|/)node_modules(/|$) - [F,L,NC]
+    RewriteCond %{QUERY_STRING} (^|&)(Fox|cmd|exec|passthru)= [NC]
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# ---- Block access to non-minified JS/CSS source files ----
+# Only .min.js and .min.css are served; original sources are protected
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} ^/assets/(js|css)/
+    RewriteCond %{REQUEST_URI} !\.(min\.js|min\.css)$
+    RewriteCond %{REQUEST_URI} \.(js|css)$
+    RewriteRule ^ - [F,L]
+</IfModule>
+
+# ---- Routing: send all requests to index.php ----
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Skip existing files and directories
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Route everything else to index.php
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# ---- PHP settings ----
+<IfModule mod_php.c>
+    php_value upload_max_filesize 20M
+    php_value post_max_size 22M
+    php_value max_execution_time 60
+    php_flag display_errors Off
+    php_flag expose_php Off
+</IfModule>
+
+# ---- Compression ----
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+    # Hunspell dictionary files (.aff / .dic) are large plaintext — gzip cuts
+    # ~3 MB Catalan dict to ~700 KB so first-compose load isn't sluggish.
+    <FilesMatch "\.(aff|dic)$">
+        SetOutputFilter DEFLATE
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+
+# ---- Cache static assets ----
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css                  "access plus 1 month"
+    ExpiresByType application/javascript    "access plus 1 month"
+    ExpiresByType image/png                 "access plus 1 year"
+    ExpiresByType image/jpeg                "access plus 1 year"
+    ExpiresByType image/gif                 "access plus 1 year"
+    ExpiresByType image/webp                "access plus 1 year"
+    ExpiresByType image/svg+xml             "access plus 1 year"
+    ExpiresByType application/font-woff2    "access plus 1 year"
+    ExpiresByType font/woff2                "access plus 1 year"
+</IfModule>
+
+<IfModule mod_mime.c>
+    AddType font/woff2 .woff2
+</IfModule>
+
+# ---- Pass Authorization header to PHP-FPM ----
+<IfModule mod_rewrite.c>
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>

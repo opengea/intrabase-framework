@@ -1,0 +1,13 @@
+{
+  "name": "intrabase-framework",
+  "private": true,
+  "description": "Build tools for the Intrabase framework assets (minification only).",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "build": "tools/build-assets.sh"
+  },
+  "devDependencies": {
+    "clean-css-cli": "^5.6.3",
+    "terser": "^5.36.0"
+  }
+}

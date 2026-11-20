@@ -1,0 +1,9 @@
+vendor/
+node_modules/
+config/app.php
+var/
+cache/
+*.log
+build/*
+!build/.gitkeep
+.phpunit.result.cache
