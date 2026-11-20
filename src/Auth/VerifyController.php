@@ -161,7 +161,7 @@ final class VerifyController
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
             <meta http-equiv="Content-Security-Policy"
-                  content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' https://chart.googleapis.com">
+                  content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:">
             <script>
             (function(){var m=/IntrabaseMobile/i.test(navigator.userAgent);var t=m?'dark':(localStorage.getItem('ib-theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));document.documentElement.setAttribute('data-theme',t)})();
             </script>

@@ -70,15 +70,16 @@ final class TOTP
     }
 
     /**
-     * Generate a simple inline SVG QR code (no external dependencies).
+     * QR code of $data (e.g. the otpauth:// URI with the TOTP secret), drawn in
+     * the browser by /assets/vendor/qrcode.min.js (qrcode-generator, MIT).
+     *
+     * It used to be an <img> from the Google Charts API: the TOTP secret went to
+     * a third party in the URL (and that service no longer answers). Now the
+     * data never leaves the page.
      */
     public static function getQrSvg(string $data, int $size = 200): string
     {
-        // Use Google Charts API URL as fallback (rendered as img)
-        $url = 'https://chart.googleapis.com/chart?cht=qr&chs=' . $size . 'x' . $size
-             . '&chl=' . urlencode($data) . '&choe=UTF-8';
-        return '<img src="' . htmlspecialchars($url) . '" width="' . $size . '" height="' . $size
-             . '" alt="QR Code" style="image-rendering:pixelated">';
+        return \Intrabase\Support\Qr::html($data, $size);
     }
 
     // -------------------------------------------------------------------------

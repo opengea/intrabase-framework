@@ -9,7 +9,7 @@ use Intrabase\Security\Output;
 /**
  * QrcodeComponent
  *
- * QR code display using Google Charts API.
+ * QR code display, drawn in the browser (Support\Qr): no third-party image service.
  *
  * options:
  *   size — QR code image size in pixels (default: 150)
@@ -31,10 +31,8 @@ final class QrcodeComponent implements ComponentInterface
 
         // Preview QR if value exists
         if (trim((string) $value) !== '') {
-            $encoded = urlencode(trim((string) $value));
             $html .= "<div class=\"ib-qrcode__preview\">"
-                   . "<img src=\"https://chart.googleapis.com/chart?chs={$size}x{$size}&amp;cht=qr&amp;chl={$encoded}\""
-                   . " alt=\"QR Code\" width=\"{$size}\" height=\"{$size}\">"
+                   . \Intrabase\Support\Qr::html(trim((string) $value), (int) $size)
                    . "</div>";
         }
 
@@ -49,11 +47,9 @@ final class QrcodeComponent implements ComponentInterface
             return '<span class="ib-qrcode--empty">--</span>';
         }
 
-        $size    = (int) ($options['size'] ?? 150);
-        $encoded = urlencode($data);
+        $size = (int) ($options['size'] ?? 150);
 
-        return "<img src=\"https://chart.googleapis.com/chart?chs={$size}x{$size}&amp;cht=qr&amp;chl={$encoded}\""
-             . " alt=\"QR Code\" class=\"ib-qrcode__img\" width=\"{$size}\" height=\"{$size}\">";
+        return \Intrabase\Support\Qr::html($data, $size);
     }
 
     public function searchFilter(string $field, string $searchValue, string $operator, array $options = []): ?array

@@ -519,6 +519,12 @@ class Application
                 return;
             }
 
+            // Members of config('require_totp_groups') (default: admin) first enrol
+            // an authenticator app on /profile.
+            if ($this->enforceRequiredTotp($path)) {
+                return;
+            }
+
             // Return to the page that was requested before logging in (LoginReturn, 15 min).
             if ($path === '/' && $method === 'GET') {
                 $ret = $this->session->get(\Intrabase\Support\LoginReturn::SESSION_KEY);
@@ -550,6 +556,15 @@ class Application
                     header('Location: ' . $target, true, 302);
                     return;
                 }
+            }
+
+            // The user's own profile: name, language, password, TOTP, trusted devices.
+            if ($path === '/profile' || $path === '/profile/') {
+                $this->userAccount = $this->session->user() ?? [];
+                Lang::init((string) ($this->userAccount['locale'] ?? 'en'), dirname(__DIR__, 2) . '/lang');
+                $this->initModAppMap();
+                (new \Intrabase\Auth\ProfileController($this->db, $this->session, new CSRF($this->session), $this->config))->handle();
+                return;
             }
 
             // Authenticated file downloads (uploads of file/picture fields).
@@ -621,6 +636,7 @@ class Application
             return $this->routeRegistry;
         }
         $this->routeRegistry = new RouteRegistry();
+        \Intrabase\View\LayoutExtensions::addUserMenuItem('/profile', 'fa-solid fa-id-card', 'my_profile');
         foreach ((array) ($this->config['plugins'] ?? []) as $class) {
             if (!is_string($class) || !class_exists($class)) {
                 $this->logger->error('Plugin not found', ['class' => $class]);
@@ -1711,6 +1727,52 @@ class Application
         }
         $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
         return str_contains($accept, 'application/json') && !str_contains($accept, 'text/html');
+    }
+
+    /**
+     * Two-step verification with an authenticator app is mandatory for the
+     * groups in config('require_totp_groups') (default ['admin']: whoever can
+     * change users and permissions). Until they enrol, such users can only use
+     * /profile (where the QR code is) and log out. An e-mail code would not do:
+     * on many installs the mailbox itself lives inside Intrabase.
+     *
+     * @return bool true if the request was answered
+     */
+    private function enforceRequiredTotp(string $path): bool
+    {
+        if ($this->session->get('_ib_totp_ok') === true) {
+            return false;
+        }
+        foreach (['/profile', '/logout', '/notifications/', '/user/', '/api/', '/login', '/download'] as $open) {
+            if (str_starts_with($path, $open)) {
+                return false;
+            }
+        }
+        $userId = (int) ($this->session->userId() ?? 0);
+        if ($userId <= 0) {
+            return false;
+        }
+        try {
+            $required = (new \Intrabase\Auth\ProfileController($this->db, $this->session, new CSRF($this->session), $this->config))
+                ->totpRequired($userId);
+            $enabled = (int) ($this->db->fetchOne('SELECT totp_enabled FROM ib_users WHERE id = :id', ['id' => $userId])['totp_enabled'] ?? 0) === 1;
+        } catch (\Throwable $e) {
+            $this->logger->error('enforceRequiredTotp failed', ['error' => $e->getMessage()]);
+            return false;
+        }
+        if (!$required || $enabled) {
+            $this->session->set('_ib_totp_ok', true);
+            return false;
+        }
+        if ($this->isXhrRequest($path)) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['ok' => false, 'error' => 'totp_required', 'redirect' => '/profile#security']);
+            return true;
+        }
+        $this->session->flash('info', __('totp_required_admin'));
+        header('Location: /profile#security', true, 302);
+        return true;
     }
 
     private function respondSessionExpired(): void

@@ -7,6 +7,7 @@ These components are distributed with Intrabase under their own licences.
 | Font Awesome Free | `public/assets/vendor/fontawesome/`, `public/assets/fonts/fa-solid-900.ttf` | Icons CC BY 4.0, fonts SIL OFL 1.1, code MIT — see `public/assets/vendor/fontawesome/LICENSE.txt` |
 | DOMPurify 3.2.6 | `public/assets/vendor/purify.min.js` | Apache 2.0 or MPL 2.0 |
 | Quill | `public/assets/vendor/quill.min.js`, `quill.snow.css` | BSD 3-Clause |
+| qrcode-generator 1.4.4 (Kazuhiko Arase) | `public/assets/vendor/qrcode.min.js` | MIT (notice kept in the file) |
 
 PHP and JavaScript build dependencies are installed by Composer and npm and keep
 their own licences (see `composer.lock` and `package-lock.json`).
