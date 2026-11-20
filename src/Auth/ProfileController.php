@@ -26,6 +26,8 @@ use Intrabase\View\Layout;
 final class ProfileController
 {
     private const MIN_PASSWORD = 12;
+    /** Seconds a pending TOTP enrolment (the secret shown in the QR) stays valid. */
+    private const SETUP_TTL = 900;
     private const LOCALES = ['ca' => 'Català', 'es' => 'Español', 'en' => 'English', 'eu' => 'Euskara'];
 
     public function __construct(
@@ -122,9 +124,19 @@ final class ProfileController
 
     private function enableTotp(int $userId): never
     {
-        $secret = (string) $this->session->get('_ib_totp_setup', '');
+        // Enrolling replaces nothing: if TOTP is already on, it has to be turned
+        // off first (which asks for the password).
+        $on = $this->db->fetchOne('SELECT totp_enabled FROM ib_users WHERE id = :id', ['id' => $userId]);
+        if ((int) ($on['totp_enabled'] ?? 0) === 1) {
+            $this->back('security');
+        }
+        // A stolen session must not be able to enrol the thief's phone.
+        if (!$this->checkPassword($userId, (string) ($_POST['current_password'] ?? ''))) {
+            $this->fail(__('password_wrong_current'), 'security');
+        }
+        $secret = $this->setupSecret($userId);
         $code   = preg_replace('/\D/', '', Input::post('totp_code'));
-        if ($secret === '' || strlen($code) !== 6 || !TOTP::verify($secret, $code)) {
+        if ($secret === null || strlen($code) !== 6 || !TOTP::verify($secret, $code)) {
             $this->fail(__('totp_wrong_code'), 'security');
         }
         $this->db->execute(
@@ -198,10 +210,10 @@ final class ProfileController
                        . '<button class="ib-btn ib-btn--danger" type="submit">' . $e(__('totp_disable')) . '</button></form>';
             }
         } else {
-            $secret = (string) $this->session->get('_ib_totp_setup', '');
-            if ($secret === '') {
+            $secret = $this->setupSecret($userId);
+            if ($secret === null) {
                 $secret = TOTP::generateSecret();
-                $this->session->set('_ib_totp_setup', $secret);
+                $this->session->set('_ib_totp_setup', ['user' => $userId, 'secret' => $secret, 'until' => time() + self::SETUP_TTL]);
             }
             $issuer = (string) ($this->config['name'] ?? 'Intrabase');
             $uri    = TOTP::getUri($secret, (string) ($user['email'] ?? ''), $issuer);
@@ -212,6 +224,8 @@ final class ProfileController
                   . '<p class="ib-card__subtitle">' . $e(__('totp_manual_key')) . ' <code>' . $e(trim(chunk_split($secret, 4, ' '))) . '</code></p>'
                   . '<form method="post" action="/profile" class="ib-form">' . $field
                   . '<input type="hidden" name="action" value="totp_enable">'
+                  . '<div class="ib-form__row"><label class="ib-form__label" for="pf-en-pass">' . $e(__('password_current')) . '</label>'
+                  . '<input class="ib-input" type="password" id="pf-en-pass" name="current_password" autocomplete="current-password" required></div>'
                   . '<div class="ib-form__row"><label class="ib-form__label" for="pf-code">' . $e(__('totp_code')) . '</label>'
                   . '<input class="ib-input" type="text" id="pf-code" name="totp_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></div>'
                   . '<button class="ib-btn ib-btn--primary" type="submit">' . $e(__('totp_enable')) . '</button></form>';
@@ -286,6 +300,18 @@ final class ProfileController
               WHERE ug.user_id = ? AND g.name IN ({$ph}) LIMIT 1",
             array_merge([$userId], $groups)
         ) !== null;
+    }
+
+    /** The pending enrolment secret, only if it belongs to this user and has not expired. */
+    private function setupSecret(int $userId): ?string
+    {
+        $setup = $this->session->get('_ib_totp_setup');
+        if (!is_array($setup) || (int) ($setup['user'] ?? 0) !== $userId || (int) ($setup['until'] ?? 0) < time()
+            || !is_string($setup['secret'] ?? null) || $setup['secret'] === '') {
+            $this->session->forget('_ib_totp_setup');
+            return null;
+        }
+        return $setup['secret'];
     }
 
     private function checkPassword(int $userId, string $password): bool
