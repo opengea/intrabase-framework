@@ -770,7 +770,7 @@ final class LoginController
                  VALUES
                    (:token, :email, :tgt, :ua, DATE_ADD(NOW(), INTERVAL 30 DAY))'
             )->execute([
-                ':token' => $token,
+                ':token' => \Intrabase\Support\RememberToken::stored($token),   // hash only; the cookie keeps the token
                 ':email' => $email,
                 ':tgt'   => (int) $targetId,
                 ':ua'    => $uaTrim,
