@@ -1600,6 +1600,46 @@ abstract class Module
             || preg_match('/(^|_)(password|passwd|pass|secret|private_key|api_key|token_hash|totp_secret|imap_password|smtp_password)(_|$)/i', $field) === 1;
     }
 
+    /** @var list<string> Fields this user may not write (FieldAccess): sanitizeData() drops them. */
+    protected array $fieldWriteDenied = [];
+
+    /**
+     * Narrow the field lists for the current user (sys_field_access_rules, see
+     * Security\FieldAccess). Unreadable fields leave every list and the API
+     * responses; unwritable ones become read-only and are never written from
+     * user input; unlisted ones only leave the list. The key is never touched.
+     *
+     * @param list<string> $unreadable
+     * @param list<string> $unwritable
+     * @param list<string> $unlisted
+     */
+    public function restrictFields(array $unreadable, array $unwritable, array $unlisted = []): void
+    {
+        $keep = [$this->key];
+        $unreadable = array_values(array_diff($unreadable, $keep));
+        $unwritable = array_values(array_diff($unwritable, $keep));
+        $unlisted   = array_values(array_diff($unlisted, $keep));
+        if ($unreadable === [] && $unwritable === [] && $unlisted === []) {
+            return;
+        }
+        // An empty editFields means "the same as fields": pin it before narrowing.
+        if ($this->editFields === []) {
+            $this->editFields = $this->fields;
+        }
+        if ($this->showFields === [] && $this->detailFields === [] && $unlisted !== []) {
+            $this->showFields = $this->fields;   // the detail keeps what only the list loses
+        }
+        $drop = static fn(array $list, array $out): array => array_values(array_diff($list, $out));
+        $this->fields       = $drop($this->fields, array_merge($unreadable, $unlisted));
+        $this->editFields   = $drop($this->editFields, $unreadable);
+        $this->showFields   = $drop($this->showFields, $unreadable);
+        $this->detailFields = $drop($this->detailFields, $unreadable);
+        $this->searchFields = $drop($this->searchFields, $unreadable);
+        $this->sensitiveFields  = array_values(array_unique(array_merge($this->sensitiveFields, $unreadable)));
+        $this->readonly         = array_values(array_unique(array_merge($this->readonly, $unwritable)));
+        $this->fieldWriteDenied = array_values(array_unique(array_merge($this->fieldWriteDenied, $unreadable, $unwritable)));
+    }
+
     protected function applyPermissions(): void
     {
         $session = $this->container->get(Session::class);
@@ -1624,6 +1664,7 @@ abstract class Module
         if (!empty($groupIds)) {
             Permission::applyToModule($this, $groupIds, $moduleKey, $this->db);
         }
+        \Intrabase\Security\FieldAccess::apply($this, (int) $userId, $moduleKey, $this->db);
 
         // Permís de lectura per persona a l'app (UserAppAccess, pestanya Usuaris de l'empresa).
         $appKey = \Intrabase\Core\Router::currentApp();
@@ -2529,6 +2570,10 @@ abstract class Module
      */
     protected function sanitizeData(array $data): array
     {
+        // Fields a field-access rule keeps this user from writing (FieldAccess).
+        if ($this->fieldWriteDenied !== []) {
+            $data = array_diff_key($data, array_flip($this->fieldWriteDenied));
+        }
         $sanitized = [];
         foreach ($data as $field => $value) {
             $sanitized[$field] = $this->sanitizeFieldValue($field, $value);

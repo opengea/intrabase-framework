@@ -441,6 +441,7 @@ class ModuleApiController extends ApiController
         if ($groupIds !== []) {
             \Intrabase\Security\Permission::applyToModule($module, $groupIds, $moduleName, $this->db);
         }
+        \Intrabase\Security\FieldAccess::apply($module, $userId, $moduleName, $this->db);
         $app = (new Acl())->ownerApp($moduleName, $this->db);
         $entityId = (int) ($this->tokenData['entity_id'] ?? 0);
         if ($app !== null && $entityId > 0) {
