@@ -834,7 +834,7 @@ final class LoginController
 
             // Fetch and validate token
             $stmt = $masterPdo->prepare(
-                'SELECT id, email, target_tenant_id, ip, expires_at, used_at
+                'SELECT id, email, source_tenant_id, target_tenant_id, ip, expires_at, used_at
                    FROM ib_login_tokens
                   WHERE token = :token
                   LIMIT 1'
@@ -887,6 +887,18 @@ final class LoginController
             }
 
             $userId = (int) $user['id'];
+
+            // From ANOTHER tenant: the token only says that somebody signed in there
+            // with an account that has the same address, not that they own this
+            // account (another tenant may create a user with any address), and it
+            // skipped this tenant's own second factor. So this tenant asks for it:
+            // the TOTP if the account has one, otherwise a code to the account's
+            // address, unless this browser is already a trusted device here.
+            $sourceTenantId = (int) ($row['source_tenant_id'] ?? 0);
+            if ($sourceTenantId !== $currentTenantId
+                && !\Intrabase\Support\TrustedDevice::isTrusted($this->db, $userId)) {
+                $this->triggerVerification($userId, (string) $user['email'], (string) ($user['name'] ?? ''), $ip);
+            }
 
             // Update last login
             $pdo->prepare('UPDATE ib_users SET last_login_ip = :ip, last_login = NOW() WHERE id = :id')

@@ -124,7 +124,9 @@ return [
     /**
      * Send users to another tenant of the same host after login when their
      * organization's name matches that tenant (ib_tenants.client_name). The
-     * target logs them in by e-mail with a one-time token. Off by default.
+     * target logs them in by e-mail with a one-time token, and asks for its own
+     * second factor (TOTP, or a code to the address) unless the browser is a
+     * trusted device there: the e-mail match alone proves nothing. Off by default.
      */
     // 'cross_tenant_login' => false,
 

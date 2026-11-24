@@ -66,6 +66,17 @@ class SysPermissionsMatrix extends Module
             return;
         }
 
+        // Changing permissions is changing who can do what (24/11/2026): only a
+        // member of the admin group, and only if no rule (ib_permissions or a
+        // read-only level on the app) takes edit rights on this module away.
+        // Reaching the page is not enough: whoever gets the System app through a
+        // group of their own could otherwise grant themselves everything.
+        if (!$this->mayChangePermissions()) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Accés denegat']);
+            return;
+        }
+
         $action  = Input::post('action', '');
         $groupId = (int) Input::post('group_id', '0');
 
@@ -81,6 +92,32 @@ class SysPermissionsMatrix extends Module
         } else {
             echo json_encode(['ok' => false, 'error' => 'Acció desconeguda']);
         }
+    }
+
+    private function mayChangePermissions(): bool
+    {
+        if ($this->userReadOnly) {
+            return false;
+        }
+        $session = $this->container->get(\Intrabase\Security\Session::class);
+        $userId  = (int) ($session->userId() ?? 0);
+        if ($userId <= 0) {
+            return false;
+        }
+        $rows = $this->db->fetchAll(
+            'SELECT g.id, g.name FROM ib_user_groups ug JOIN ib_groups g ON g.id = ug.group_id WHERE ug.user_id = :uid',
+            ['uid' => $userId]
+        );
+        if (!in_array('admin', array_column($rows, 'name'), true)) {
+            return false;
+        }
+        $rule = \Intrabase\Security\Permission::check(
+            array_map('intval', array_column($rows, 'id')),
+            \Intrabase\Core\Router::currentMod() ?: 'sys_permissions_matrix',
+            'edit',
+            $this->db
+        );
+        return $rule !== false;
     }
 
     private function actionSaveGroup(int $groupId): void
@@ -113,7 +150,9 @@ class SysPermissionsMatrix extends Module
                 continue;
             }
             $moduleKey = preg_replace('/[^a-z0-9_]/', '', strtolower((string) $moduleKey));
-            if ($moduleKey === '') {
+            // No rule for the matrix itself: a preset or a save must never leave
+            // the admins unable to undo it (mayChangePermissions() reads it).
+            if ($moduleKey === '' || $moduleKey === 'sys_permissions_matrix') {
                 continue;
             }
 
@@ -161,6 +200,9 @@ class SysPermissionsMatrix extends Module
         );
 
         foreach ($modules as $mk) {
+            if ($mk === 'sys_permissions_matrix') {
+                continue;   // see actionSaveGroup()
+            }
             $ins->execute([
                 ':gid' => $groupId,
                 ':mk'  => $mk,

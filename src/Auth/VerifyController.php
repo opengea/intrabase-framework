@@ -10,6 +10,7 @@ use Intrabase\Security\Input;
 use Intrabase\Security\Output;
 use Intrabase\Security\Session;
 use Intrabase\Security\TOTP;
+use Intrabase\Security\TotpSecretStore;
 use Intrabase\Support\AssetResolver;
 use Intrabase\Support\LoginLogger;
 use Intrabase\Support\RateLimiter;
@@ -71,6 +72,13 @@ final class VerifyController
         $pending = $this->session->get('pending_verify');
         if (!is_array($pending) || empty($pending['user_id'])) {
             $this->redirect('/login');
+        }
+
+        // Only a POST with the CSRF token sends a new code: a GET from another
+        // site used to send mail and void the code the user was typing.
+        if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST'
+            || !$this->csrf->validateToken()) {
+            $this->redirect('/login/verify');
         }
 
         $userId  = (int) $pending['user_id'];
@@ -261,9 +269,11 @@ final class VerifyController
         HTML;
 
         if ($activeMethod === 'email') {
-            echo '<div style="text-align:center;margin-top:1rem">'
-               . '<a href="/login/verify/resend" style="color:var(--ib-primary,#000);font-size:.875rem">'
-               . '<i class="fa-solid fa-rotate-right"></i> Tornar a enviar el codi</a></div>';
+            echo '<form method="post" action="/login/verify/resend" style="text-align:center;margin-top:1rem">'
+               . $csrfField
+               . '<button type="submit" style="background:none;border:0;padding:0;cursor:pointer;'
+               . 'color:var(--ib-primary,#000);font-size:.875rem;font-family:inherit">'
+               . '<i class="fa-solid fa-rotate-right"></i> Tornar a enviar el codi</button></form>';
         }
 
         // TOTP setup moved to /preferences
@@ -366,7 +376,38 @@ final class VerifyController
             return false;
         }
 
-        return TOTP::verify((string) $secret, $code);
+        $stored = (string) $secret;
+        $secret = TotpSecretStore::open($stored);
+        $step   = $secret === '' ? null : TOTP::matchStep($secret, $code);
+        if ($step === null) {
+            return false;
+        }
+
+        // A secret from before it was encrypted is sealed now that it has been used.
+        if (!TotpSecretStore::isSealed($stored)) {
+            $sealed = TotpSecretStore::seal($secret);
+            if ($sealed !== $stored) {
+                $pdo->prepare('UPDATE ib_users SET totp_secret = :s WHERE id = :id AND totp_secret = :old')
+                    ->execute([':s' => $sealed, ':id' => $userId, ':old' => $stored]);
+            }
+        }
+
+        // A code opens ONE session: refuse its step, or an older one, once a
+        // session was opened with it or with a later step. The step is recorded
+        // first and counted after, so two simultaneous requests with the same
+        // code cannot both get through.
+        $limiter = new RateLimiter($this->db);
+        $window  = TOTP::replayWindowSeconds();
+        $key     = 'totp_step:' . $userId . ':' . $step;
+        $limiter->record($key);
+        if ($limiter->countHits($key, $window) > 1
+            || $limiter->countHits('totp_step:' . $userId . ':' . ($step + 1), $window) > 0
+            || $limiter->countHits('totp_step:' . $userId . ':' . ($step + 2), $window) > 0) {
+            error_log('[VerifyController] TOTP code reused, user ' . $userId);
+            return false;
+        }
+
+        return true;
     }
 
     private function userHasTotp(int $userId): bool

@@ -141,7 +141,7 @@ final class ProfileController
         }
         $this->db->execute(
             'UPDATE ib_users SET totp_secret = :s, totp_enabled = 1 WHERE id = :id',
-            ['s' => $secret, 'id' => $userId]
+            ['s' => \Intrabase\Security\TotpSecretStore::seal($secret), 'id' => $userId]
         );
         $this->session->forget('_ib_totp_setup');
         $this->session->forget('_ib_totp_ok');

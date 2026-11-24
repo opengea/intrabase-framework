@@ -39,8 +39,19 @@ final class TOTP
      */
     public static function verify(string $secret, string $code, ?int $time = null): bool
     {
+        return self::matchStep($secret, $code, $time) !== null;
+    }
+
+    /**
+     * The time step (counter) the code belongs to, or null when it matches none
+     * of the steps in the window. Whoever signs someone in with it must refuse
+     * a step that was already used (24/11/2026): a code is valid for ~90 s, and
+     * a shoulder-surfed or phished one must not open a second session.
+     */
+    public static function matchStep(string $secret, string $code, ?int $time = null): ?int
+    {
         if (strlen($code) !== self::DIGITS || !ctype_digit($code)) {
-            return false;
+            return null;
         }
 
         $time = $time ?? time();
@@ -49,11 +60,29 @@ final class TOTP
         for ($i = -self::WINDOW; $i <= self::WINDOW; $i++) {
             $counter = intdiv($time, self::PERIOD) + $i;
             if (hash_equals(self::hotp($key, $counter), $code)) {
-                return true;
+                return $counter;
             }
         }
 
-        return false;
+        return null;
+    }
+
+    /** Raw bytes of a Base32 secret (what TotpSecretStore encrypts). */
+    public static function secretBytes(string $secret): string
+    {
+        return self::base32Decode($secret);
+    }
+
+    /** Base32 secret from its raw bytes. */
+    public static function secretFromBytes(string $bytes): string
+    {
+        return self::base32Encode($bytes);
+    }
+
+    /** Seconds a used step must be remembered: longer than the acceptance window. */
+    public static function replayWindowSeconds(): int
+    {
+        return (2 * self::WINDOW + 2) * self::PERIOD;
     }
 
     /**
