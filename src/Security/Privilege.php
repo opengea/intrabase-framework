@@ -11,7 +11,8 @@ use Intrabase\Database\Connection;
  * Who may change who-can-do-what (24/11/2026).
  *
  * The tables that grant rights — group permissions, field rules, groups, group
- * membership, apps (their group_access) and users — are written only by members
+ * membership, apps (their group_access), users and saved views (raw SQL in
+ * where_clause) — are written only by members
  * of the administrators group, whatever app or group gives a user access to the
  * modules that edit them. Otherwise whoever reached the System app through a
  * group of their own could grant themselves everything, from the web or the API.
@@ -30,6 +31,7 @@ final class Privilege
         'ib_user_groups',
         'ib_apps',
         'ib_users',
+        'ib_sys_views',   // saved views carry a raw SQL condition (where_clause)
     ];
 
     public static function guards(string $table): bool
