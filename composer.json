@@ -40,6 +40,7 @@
     },
     "scripts": {
         "test": "phpunit --no-coverage",
+        "test-coverage": "phpunit --coverage-html build/coverage",
         "analyze": "phpstan analyse --memory-limit=512M"
     },
     "config": {

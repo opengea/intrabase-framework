@@ -21,11 +21,11 @@
         </include>
     </source>
 
-    <coverage>
-        <report>
-            <html outputDirectory="build/coverage"/>
-        </report>
-    </coverage>
+    <!--
+        No <coverage><report> here: with a report configured, every run on a host without a
+        coverage driver (xdebug/pcov) ends with "No code coverage driver available".
+        For coverage, with a driver: `composer test-coverage` (HTML in build/coverage).
+    -->
 
     <php>
         <ini name="display_errors" value="1"/>
