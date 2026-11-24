@@ -1664,6 +1664,7 @@ abstract class Module
         $this->canDelete = false;
         $this->canDuplicate = false;
         $this->canImport = false;
+        $this->canReorder = false;
         $this->userReadOnly = true;
         $this->inlineToggle = [];
     }
@@ -1917,6 +1918,10 @@ abstract class Module
 
     private function handleBulkDelete(): void
     {
+        if ($this->privilegeLocked) {
+            http_response_code(403);
+            return;
+        }
         if (!$this->canMultiselect || !$this->canDelete) {
             http_response_code(403);
             return;
@@ -1951,6 +1956,12 @@ abstract class Module
      */
     private function handleBulkAction(): void
     {
+        // Custom bulk handlers may write with their own SQL: refuse before any of them.
+        if ($this->privilegeLocked) {
+            http_response_code(403);
+            $this->renderAccessDenied();
+            return;
+        }
         if (!$this->canMultiselect || !$this->canEdit || $this->bulkActions === []) {
             http_response_code(403);
             return;
@@ -2012,6 +2023,7 @@ abstract class Module
      */
     protected function bulkSet(array $ids, array $set, string $touch = ''): int
     {
+        $this->assertPrivilegeWritable();
         $assign = [];
         $params = [];
         foreach ($set as $col => $val) {
@@ -2139,7 +2151,7 @@ abstract class Module
 
     private function handleReorder(?array $jsonBody = null): void
     {
-        if (!$this->canReorder) {
+        if (!$this->canReorder || $this->privilegeLocked) {
             http_response_code(403);
             echo json_encode(['error' => 'Reorder not allowed']);
             return;
