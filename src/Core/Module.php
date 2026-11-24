@@ -1320,6 +1320,7 @@ abstract class Module
      */
     public function create(array $data): int
     {
+        $this->assertPrivilegeWritable();
         $data = $this->sanitizeData($data);
 
         if (!$this->runDynamicHooks('onPreSave', $data)) {
@@ -1352,6 +1353,7 @@ abstract class Module
      */
     public function update(int $id, array $data): bool
     {
+        $this->assertPrivilegeWritable();
         $before = $this->find($id);
         // find() ja aplica la propietat del mòdul: si no hi ha registre visible
         // per a aquest usuari, no es pot modificar (abans l'UPDATE s'executava
@@ -1394,6 +1396,7 @@ abstract class Module
      */
     public function delete(int $id): bool
     {
+        $this->assertPrivilegeWritable();
         $emptyData = [];
         if (!$this->runDynamicHooks('onPreDelete', $emptyData, $id)) {
             throw new \RuntimeException($this->dynamicBlockMessage ?? 'Delete blocked by hook rule');
@@ -1635,9 +1638,41 @@ abstract class Module
         $this->showFields   = $drop($this->showFields, $unreadable);
         $this->detailFields = $drop($this->detailFields, $unreadable);
         $this->searchFields = $drop($this->searchFields, $unreadable);
+        // Filters, sorting and toggles query or write the column: an unreadable
+        // field there is an oracle for its value (filter by it, sort by it).
+        foreach ($unreadable as $f) {
+            unset($this->filterFields[$f]);
+        }
+        $this->inlineToggle = $drop($this->inlineToggle, array_merge($unreadable, $unwritable));
+        if (in_array(preg_replace('/\s+(ASC|DESC)$/i', '', trim($this->orderBy)), $unreadable, true)) {
+            $this->orderBy = '';
+        }
         $this->sensitiveFields  = array_values(array_unique(array_merge($this->sensitiveFields, $unreadable)));
         $this->readonly         = array_values(array_unique(array_merge($this->readonly, $unwritable)));
         $this->fieldWriteDenied = array_values(array_unique(array_merge($this->fieldWriteDenied, $unreadable, $unwritable)));
+    }
+
+    /** Writes refused: a table that grants rights, and the user is not an administrator (Privilege). */
+    protected bool $privilegeLocked = false;
+
+    /** Make the module read-only for this user: every write path refuses (web, API, hooks' callers). */
+    public function lockPrivilegeWrites(): void
+    {
+        $this->privilegeLocked = true;
+        $this->canAdd = false;
+        $this->canEdit = false;
+        $this->canDelete = false;
+        $this->canDuplicate = false;
+        $this->canImport = false;
+        $this->userReadOnly = true;
+        $this->inlineToggle = [];
+    }
+
+    private function assertPrivilegeWritable(): void
+    {
+        if ($this->privilegeLocked) {
+            throw new \RuntimeException('Only administrators can change ' . $this->table);
+        }
     }
 
     protected function applyPermissions(): void
@@ -1665,6 +1700,10 @@ abstract class Module
             Permission::applyToModule($this, $groupIds, $moduleKey, $this->db);
         }
         \Intrabase\Security\FieldAccess::apply($this, (int) $userId, $moduleKey, $this->db);
+        if (\Intrabase\Security\Privilege::guards($this->table)
+            && !\Intrabase\Security\Privilege::isAdmin($this->db, (int) $userId)) {
+            $this->lockPrivilegeWrites();
+        }
 
         // Permís de lectura per persona a l'app (UserAppAccess, pestanya Usuaris de l'empresa).
         $appKey = \Intrabase\Core\Router::currentApp();
@@ -3050,6 +3089,9 @@ abstract class Module
         // Field filters
         foreach ($filters as $field => $value) {
             self::assertIdentifier((string) $field, 'apiList filter');
+            if ($this->isSensitiveField((string) $field)) {
+                continue;   // a credential or a field this user cannot read: no oracle
+            }
             $placeholder = '_f_' . $field;
             $qb = $qb->where("{$field} = :{$placeholder}", [$placeholder => $value]);
         }
@@ -3061,7 +3103,7 @@ abstract class Module
         if (preg_match('/^([A-Za-z_][A-Za-z0-9_]*)\s+(ASC|DESC)$/i', $ob, $m)) {
             $ob = $m[1];
         }
-        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $ob)) {
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $ob) || $this->isSensitiveField($ob)) {
             $ob = preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $this->key) ? $this->key : 'id';
         }
         $qb = $qb->orderBy($ob, $orderDir);

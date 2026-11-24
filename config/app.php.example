@@ -130,6 +130,13 @@ return [
      */
     // 'cross_tenant_login' => false,
 
+    /**
+     * Id of the administrators group (bin/install.php creates it first: 1). Only
+     * its members may write permissions, field rules, groups, memberships, apps
+     * and users (Security\Privilege), whoever else can open those modules.
+     */
+    // 'admin_group_id' => 1,
+
     /** Databases bin/cron.php runs tasks in (multi-tenant hosts). Default: [db_name]. */
     // 'cron_databases' => ['intrabase'],
 

@@ -108,7 +108,8 @@ class SysPermissionsMatrix extends Module
             'SELECT g.id, g.name FROM ib_user_groups ug JOIN ib_groups g ON g.id = ug.group_id WHERE ug.user_id = :uid',
             ['uid' => $userId]
         );
-        if (!in_array('admin', array_column($rows, 'name'), true)) {
+        // The administrators group by id, never by its (editable) name.
+        if (!\Intrabase\Security\Privilege::isAdmin($this->db, $userId)) {
             return false;
         }
         $rule = \Intrabase\Security\Permission::check(

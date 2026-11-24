@@ -442,6 +442,10 @@ class ModuleApiController extends ApiController
             \Intrabase\Security\Permission::applyToModule($module, $groupIds, $moduleName, $this->db);
         }
         \Intrabase\Security\FieldAccess::apply($module, $userId, $moduleName, $this->db);
+        if (\Intrabase\Security\Privilege::guards($module->table)
+            && !\Intrabase\Security\Privilege::isAdmin($this->db, $userId)) {
+            $module->lockPrivilegeWrites();
+        }
         $app = (new Acl())->ownerApp($moduleName, $this->db);
         $entityId = (int) ($this->tokenData['entity_id'] ?? 0);
         if ($app !== null && $entityId > 0) {
